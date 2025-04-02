@@ -1,40 +1,27 @@
-data "aws_availability_zones" "available" {}
-
-locals {
-  cluster_name = "cloud_user_eks-${random_string.suffix.result}"
-}
-
-resource "random_string" "suffix" {
-  length  = 8
-  special = false
-}
-
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "5.7.0"
+  version = "~> 5.0"
 
-  name                 = "cloud_user-vpc"
-  cidr                 = var.vpc_cidr
-  azs                  = data.aws_availability_zones.available.names
-  private_subnets      = ["10.0.1.0/24", "10.0.2.0/24"]
-  public_subnets       = ["10.0.4.0/24", "10.0.5.0/24"]
-  enable_nat_gateway   = true
-  single_nat_gateway   = true
-  enable_dns_hostnames = true
-  enable_dns_support   = true
+  name = local.name
+  cidr = local.vpc_cidr
 
-  tags = {
-    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
-  }
+  azs             = local.azs
+  private_subnets = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 4, k)]
+  public_subnets  = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 48)]
+  intra_subnets   = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 52)]
+
+  enable_nat_gateway = true
+  single_nat_gateway = true
 
   public_subnet_tags = {
-    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
-    "kubernetes.io/role/elb"                      = "1"
+    "kubernetes.io/role/elb" = 1
   }
 
   private_subnet_tags = {
-    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
-    "kubernetes.io/role/internal-elb"             = "1"
+    "kubernetes.io/role/internal-elb" = 1
+    # Tags subnets for Karpenter auto-discovery
+    "karpenter.sh/discovery" = local.name
   }
 
+  tags = local.tags
 }
