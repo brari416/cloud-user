@@ -25,10 +25,6 @@ terraform {
       source  = "hashicorp/cloudinit"
       version = "~> 2.2.0"
     }
-    helm = {
-      source  = "hashicorp/helm"
-      version = ">= 2.7"
-    }
     kubectl = {
       source  = "gavinbunney/kubectl"
       version = "~> 1.14"
@@ -36,13 +32,13 @@ terraform {
   }
 }
 
-terraform {
-  backend "s3" {
-    bucket = "cloud-user-backend"
-    key    = "cloud_user.tfstae"
-    region = "us-east-1"
-  }
-}
+#terraform {
+#  backend "s3" {
+#    bucket = "cloud-user-backend"
+#    key    = "cloud_user.tfstae"
+#    region = "us-east-1"
+#  }
+#}
 
 provider "aws" {
   region = var.aws_region
@@ -65,6 +61,7 @@ provider "helm" {
       # This requires the awscli to be installed locally where Terraform is executed
       args = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
     }
+  
   }
 }
 
@@ -131,5 +128,39 @@ locals {
     GithubRepo = "terraform-aws-eks"
     GithubOrg  = "terraform-aws-modules"
   }
+}
+
+locals {
+ kubeconfig = <<KUBECONFIG
+apiVersion: v1
+clusters:
+- cluster:
+    server: ${module.eks.cluster_endpoint}
+    certificate-authority-data: ${module.eks.cluster_certificate_authority_data}
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    user: aws
+  name: aws
+current-context: aws
+kind: Config
+preferences: {}
+users:
+- name: aws
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1alpha1
+      command: aws-iam-authenticator
+      args:
+        - "token"
+        - "-i"
+        - "${module.eks.cluster_name}"
+KUBECONFIG
+}
+
+resource "local_file" "kubeconfig" {
+  content  = local.kubeconfig
+  filename = "/tmp/.kube/config"
 }
 
