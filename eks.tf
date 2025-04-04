@@ -24,7 +24,22 @@ module "eks" {
   subnet_ids               = module.vpc.private_subnets
   control_plane_subnet_ids = module.vpc.intra_subnets
 
-  eks_managed_node_groups = local.eks_managed_node_groups 
+
+  eks_managed_node_groups = {
+    karpenter = {
+      ami_type       = "BOTTLEROCKET_x86_64"
+      instance_types = ["m5.large"]
+
+      min_size     = 2
+      max_size     = 3
+      desired_size = 2
+
+      labels = {
+        # Used to ensure Karpenter runs on nodes that it does not manage
+        "karpenter.sh/controller" = "true"
+      }
+    }
+  } 
 
   fargate_profiles = local.fargate_profile_enabled ? [{
     name               = "fargate-profile"
@@ -44,6 +59,8 @@ module "eks" {
 
   tags = local.tags
 }
+
+
 
 # Karpenter
 module "karpenter" {
@@ -65,11 +82,19 @@ module "karpenter" {
   tags = local.tags
 }
 
+
 module "karpenter_disabled" {
   source = "terraform-aws-modules/eks/aws//modules/karpenter"
 
   create = false
 }
+
+
+resource "local_file" "kubeconfig" {
+  content  = local.kubeconfig
+  filename = "/tmp/.kube/config"
+}
+
 
 # Karpenter Helm
 resource "helm_release" "karpenter" {
@@ -94,7 +119,7 @@ resource "helm_release" "karpenter" {
     EOT
   ]
 
-  depends_on = [local_file.kubeconfig] 
+  depends_on = [local_file.kubeconfig]
 
 }
 
@@ -189,3 +214,4 @@ resource "kubectl_manifest" "karpenter_example_deployment" {
     helm_release.karpenter
   ]
 }
+

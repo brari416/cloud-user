@@ -29,6 +29,10 @@ terraform {
       source  = "gavinbunney/kubectl"
       version = "~> 1.14"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.17.0"  
+    }
   }
 }
 
@@ -92,75 +96,4 @@ data "aws_ecrpublic_authorization_token" "token" {
   provider = aws.virginia
 }
 
-locals {
-  name   = "ex-${basename(path.cwd)}"
-  region = "us-east-1"
-
-  vpc_cidr = "10.0.0.0/16"
-  azs      = slice(data.aws_availability_zones.available.names, 0, 3)
-  
-  
-  # If true, use Fargate; otherwise, use EKS Managed Node Groups
-  fargate_profile_enabled = var.use_fargate
-
-  # EKS Managed Node Group configuration (only used if `use_fargate` is false)
-  eks_managed_node_groups = var.use_fargate ? [] : [{
-    karpenter = {
-      ami_type       = "BOTTLEROCKET_x86_64"
-      instance_types = ["m5.large"]
-
-      min_size     = 2
-      max_size     = 3
-      desired_size = 2
-
-      labels = {
-        # Used to ensure Karpenter runs on nodes that it does not manage
-        "karpenter.sh/controller" = "true"
-      }
-    }
-  }]
-  coredns_config = {
-      replicaCount = 1
-    }
-
-  tags = {
-    Example    = local.name
-    GithubRepo = "terraform-aws-eks"
-    GithubOrg  = "terraform-aws-modules"
-  }
-}
-
-locals {
- kubeconfig = <<KUBECONFIG
-apiVersion: v1
-clusters:
-- cluster:
-    server: ${module.eks.cluster_endpoint}
-    certificate-authority-data: ${module.eks.cluster_certificate_authority_data}
-  name: kubernetes
-contexts:
-- context:
-    cluster: kubernetes
-    user: aws
-  name: aws
-current-context: aws
-kind: Config
-preferences: {}
-users:
-- name: aws
-  user:
-    exec:
-      apiVersion: client.authentication.k8s.io/v1alpha1
-      command: aws-iam-authenticator
-      args:
-        - "token"
-        - "-i"
-        - "${module.eks.cluster_name}"
-KUBECONFIG
-}
-
-resource "local_file" "kubeconfig" {
-  content  = local.kubeconfig
-  filename = "/tmp/.kube/config"
-}
 

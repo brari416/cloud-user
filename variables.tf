@@ -16,7 +16,7 @@ variable "aws_region" {
 variable "use_fargate" {
   description = "Whether to use Fargate instead of EKS Managed Node Groups"
   type        = bool
-  default     = true  # Set to false to use Managed Node Groups
+  default     = false  # Set to false to use Managed Node Groups
 }
 
 
