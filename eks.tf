@@ -105,7 +105,7 @@ resource "helm_release" "karpenter" {
   repository_password = data.aws_ecrpublic_authorization_token.token.password
   chart               = "karpenter"
   version             = "1.1.1"
-  wait                = true
+  wait                = false
   timeout = 3000
 
   values = [
@@ -126,7 +126,7 @@ resource "helm_release" "karpenter" {
 
 resource "kubectl_manifest" "karpenter_node_pool" {
   yaml_body = <<-YAML
-    apiVersion: karpenter.sh/v1beta1
+    apiVersion: karpenter.sh/v1
     kind: NodePool
     metadata:
       name: default
@@ -134,7 +134,9 @@ resource "kubectl_manifest" "karpenter_node_pool" {
       template:
         spec:
           nodeClassRef:
+            group: karpenter.k8s.aws
             name: default
+            kind: EC2NodeClass
           requirements:
             - key: "karpenter.k8s.aws/instance-category"
               operator: In
@@ -162,7 +164,7 @@ resource "kubectl_manifest" "karpenter_node_pool" {
 
 resource "kubectl_manifest" "karpenter_node_class" {
   yaml_body = <<-YAML
-    apiVersion: karpenter.k8s.aws/v1beta1
+    apiVersion: karpenter.k8s.aws/v1
     kind: EC2NodeClass
     metadata:
       name: default
@@ -172,6 +174,9 @@ resource "kubectl_manifest" "karpenter_node_class" {
       subnetSelectorTerms:
         - tags:
             karpenter.sh/discovery: ${module.eks.cluster_name}
+      amiSelectorTerms:
+        - tags:
+            karpenter.sh/discovery: ${module.eks.cluster_name}    
       securityGroupSelectorTerms:
         - tags:
             karpenter.sh/discovery: ${module.eks.cluster_name}
